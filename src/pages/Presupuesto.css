@@ -1,0 +1,60 @@
+@import './Ventas.css';
+
+.presupuesto-container {
+  padding: 2rem;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.quote-table th, .quote-table td {
+  vertical-align: middle;
+}
+
+.quote-status {
+  display: inline-block;
+  padding: 0.3rem 0.8rem;
+  border-radius: var(--radius-full);
+  font-size: 0.8rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border: 1px solid transparent;
+}
+
+.quote-status.draft {
+  background: rgba(156, 163, 175, 0.1);
+  color: #9ca3af;
+  border-color: rgba(156, 163, 175, 0.2);
+}
+
+.quote-status.sent {
+  background: rgba(59, 130, 246, 0.1);
+  color: #3b82f6;
+  border-color: rgba(59, 130, 246, 0.2);
+}
+
+.quote-status.approved {
+  background: rgba(21, 128, 61, 0.1);
+  color: #15803d;
+  border-color: rgba(21, 128, 61, 0.2);
+}
+
+.quote-status.rejected {
+  background: rgba(239, 68, 68, 0.1);
+  color: #ef4444;
+  border-color: rgba(239, 68, 68, 0.2);
+}
+
+.quote-status.converted {
+  background: linear-gradient(135deg, rgba(21, 128, 61, 0.2), rgba(59, 130, 246, 0.2));
+  color: #34d399;
+  border: 1px solid rgba(21, 128, 61, 0.3);
+  box-shadow: 0 0 10px rgba(21, 128, 61, 0.1);
+}
+
+@media (max-width: 768px) {
+  .presupuesto-container {
+    padding: 1rem;
+  }
+}
+

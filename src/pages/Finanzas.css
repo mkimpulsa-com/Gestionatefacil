@@ -1,0 +1,194 @@
+.finanzas-container {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  padding-bottom: 3rem;
+}
+
+.finanzas-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.finanzas-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1.5rem;
+}
+
+.stat-card {
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.stat-title {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 0.5rem;
+}
+
+.stat-value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  margin-bottom: 0.5rem;
+}
+
+.stat-trend {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.stat-trend.success { color: var(--success); }
+.stat-trend.danger { color: var(--danger); }
+
+.balance-card {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(168, 85, 247, 0.1));
+  border: 1px solid rgba(168, 85, 247, 0.2);
+}
+
+.finanzas-tabs {
+  display: flex;
+  gap: 1rem;
+  padding: 0.5rem;
+  background: var(--surface-hover);
+  border-radius: var(--radius-lg);
+  width: fit-content;
+  margin-bottom: 1rem;
+}
+
+.tab-btn {
+  padding: 0.6rem 1.2rem;
+  border-radius: var(--radius-md);
+  font-size: 0.9rem;
+  font-weight: 500;
+  color: var(--text-muted);
+  transition: all var(--transition-fast);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+.tab-btn:hover {
+  color: var(--text-main);
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.tab-btn.active {
+  color: white;
+  background: var(--primary);
+  box-shadow: 0 4px 12px var(--primary-glow);
+}
+
+.finanzas-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.finance-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.finance-table th {
+  text-align: left;
+  padding: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--panel-border);
+  font-weight: 600;
+}
+
+.finance-table td {
+  padding: 1rem;
+  font-size: 0.9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.finance-table tr:hover {
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.tag {
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.tag-ingreso { background: rgba(21, 128, 61, 0.1); color: #15803d; }
+.tag-egreso { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+
+.iva-badge {
+  font-family: monospace;
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8rem;
+}
+
+.filter-section {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.month-selector {
+  background: var(--surface-color);
+  border: 1px solid var(--panel-border);
+  color: var(--text-main);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  outline: none;
+}
+
+.accounting-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.summary-box {
+  padding: 1rem;
+  border-radius: var(--radius-md);
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--panel-border);
+}
+
+.summary-box .label {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  display: block;
+  margin-bottom: 0.4rem;
+}
+
+.summary-box .value {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.bg-check {
+  background: rgba(21, 128, 61, 0.05) !important;
+  border-color: rgba(21, 128, 61, 0.2) !important;
+}
+
+@media (max-width: 768px) {
+  .finanzas-header {
+    flex-direction: column;
+    gap: 1rem;
+  }
+  
+  .finanzas-tabs {
+    width: 100%;
+    overflow-x: auto;
+  }
+}
+

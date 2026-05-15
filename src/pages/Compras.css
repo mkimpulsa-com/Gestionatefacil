@@ -1,0 +1,19 @@
+@import './Ventas.css';
+
+.compras-container {
+  padding: 2rem;
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.purchases-table th, .purchases-table td {
+  vertical-align: middle;
+}
+
+/* global button styles moved to index.css */
+
+@media (max-width: 768px) {
+  .compras-container {
+    padding: 1rem;
+  }
+}
