@@ -3,7 +3,7 @@ import { User, Shield, CreditCard, Bell, Monitor, Store, Lock, Camera, X, Wallet
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { db } from '../config/firebase';
-import { doc, getDoc, setDoc, collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, setDoc, collection, query, where, onSnapshot, addDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { uploadFile, deleteFile, generateUniquePath } from '../services/storageService';
 import { formatCurrency } from '../utils/format';
 import { Modal } from '../components/ui/Modal';
@@ -83,6 +83,9 @@ export function Settings() {
   const [isConfirmDeleteItemOpen, setIsConfirmDeleteItemOpen] = useState(false);
   const [itemToDeleteData, setItemToDeleteData] = useState(null);
   const [itemToDeleteType, setItemToDeleteType] = useState(null);
+
+  const [isFormatModalOpen, setIsFormatModalOpen] = useState(false);
+  const [isFormatting, setIsFormatting] = useState(false);
 
   useEffect(() => {
     const fetchCompanyData = async () => {
@@ -383,8 +386,8 @@ export function Settings() {
        let newBal = parseFloat(selectedAccount.balance) || 0;
        
        if (adjustData.action === 'add') newBal += amt;
-       if (adjustData.action === 'subtract') newBal = Math.max(0, newBal - amt);
-       if (adjustData.action === 'set') newBal = Math.max(0, amt);
+       if (adjustData.action === 'subtract') newBal -= amt;
+       if (adjustData.action === 'set') newBal = amt;
 
        await updateDoc(doc(db, 'bankAccounts', selectedAccount.id), {
           balance: newBal,
@@ -570,6 +573,42 @@ export function Settings() {
       setItemToDeleteData(null);
     } catch (error) {
       toast.error("Gestionate Fácil: Error al eliminar");
+    }
+  };
+
+  const handleFormatApp = async () => {
+    if (!currentUser) return;
+    setIsFormatting(true);
+    const toastId = toast.loading('Gestionate Fácil: Formateando aplicación...');
+    
+    try {
+      const collectionsToDelete = [
+        'deals', 'expenses', 'purchases', 'products', 'clients', 
+        'bankAccounts', 'product_categories', 'product_brands', 
+        'otherIncomes', 'notifications'
+      ];
+
+      for (const colName of collectionsToDelete) {
+        const q = query(collection(db, colName), where('userId', '==', currentUser.uid));
+        const snap = await getDocs(q);
+        
+        if (snap.empty) continue;
+
+        const batch = writeBatch(db);
+        snap.docs.forEach((doc) => {
+          batch.delete(doc.ref);
+        });
+        await batch.commit();
+      }
+
+      toast.success('Gestionate Fácil: Aplicación formateada correctamente', { id: toastId });
+      setIsFormatModalOpen(false);
+      window.location.reload(); // Refresh to clear context
+    } catch (error) {
+      console.error("Error formatting app:", error);
+      toast.error('Gestionate Fácil: Error al formatear la aplicación', { id: toastId });
+    } finally {
+      setIsFormatting(false);
     }
   };
 
@@ -1097,6 +1136,43 @@ export function Settings() {
              </div>
           )}
 
+          {activeTab === 'seguridad' && (
+            <div className="settings-section animate-fade-in">
+              <h2>Seguridad y Datos</h2>
+              <p className="section-desc">Gestiona la integridad de tu información y la seguridad de tu cuenta.</p>
+              
+              <div className="security-cards-grid" style={{ display: 'grid', gap: '1.5rem', marginTop: '1.5rem' }}>
+                <div className="glass-card" style={{ padding: '2rem', border: '1px solid rgba(255, 255, 255, 0.05)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '1rem', marginBottom: '1.5rem' }}>
+                    <div style={{ padding: '0.75rem', background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', borderRadius: '12px' }}>
+                      <AlertTriangle size={24} />
+                    </div>
+                    <div>
+                      <h3 style={{ margin: 0 }}>Zona de Peligro</h3>
+                      <p style={{ margin: 0, fontSize: '0.85rem', color: 'var(--text-muted)' }}>Acciones irreversibles sobre tus datos.</p>
+                    </div>
+                  </div>
+
+                  <div style={{ background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.1)', borderRadius: '16px', padding: '1.5rem' }}>
+                    <h4 style={{ color: 'var(--danger)', marginTop: 0 }}>Formatear Aplicación</h4>
+                    <p style={{ fontSize: '0.9rem', color: 'var(--text-muted)', marginBottom: '1.5rem' }}>
+                      Esta acción eliminará <strong>absolutamente todos</strong> tus datos de Gestionate Fácil: ventas, compras, gastos, contactos, inventario y configuraciones. 
+                      <br /><br />
+                      <strong>Atención:</strong> No existe forma de recuperar esta información una vez eliminada.
+                    </p>
+                    <button 
+                      className="btn-danger" 
+                      onClick={() => setIsFormatModalOpen(true)}
+                      style={{ padding: '0.8rem 2rem', fontWeight: 600 }}
+                    >
+                      Formatear Todo
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {activeTab === 'facturacion' && (
              <div className="settings-section animate-fade-in">
                 <h2>Facturación y Plan</h2>
@@ -1383,6 +1459,16 @@ export function Settings() {
         onConfirm={confirmDeleteAccount}
         title="Eliminar Cuenta"
         message="¿Estás seguro de eliminar esta cuenta? Perderás el registro de su saldo. No se puede deshacer."
+      />
+
+      <ConfirmModal 
+        isOpen={isFormatModalOpen}
+        onClose={() => setIsFormatModalOpen(false)}
+        onConfirm={handleFormatApp}
+        title="¡ALERTA CRÍTICA: Formatear Aplicación!"
+        message="¿ESTÁS SEGURO? Esta acción borrará permanentemente todas tus ventas, gastos, productos, contactos y configuraciones. No existe forma de recuperar estos datos una vez eliminados. Escribe 'CONFIRMAR' para proceder."
+        confirmText={isFormatting ? "Borrando..." : "SÍ, BORRAR TODO"}
+        danger={true}
       />
     </div>
   );

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Plus, Filter, Target, Loader2, Calendar, MoreVertical, Edit2, Trash2, Paperclip, Send, CheckCircle, XCircle, ShoppingCart, FileText } from 'lucide-react';
@@ -309,12 +309,15 @@ export function Presupuesto() {
 
       await addDoc(collection(db, 'deals'), dealData);
 
-      // 2. Descontar stock general porque ahora es una Venta oficial
-      for (const it of dealData.items) {
-        if (it.productId) {
-          const prodRef = doc(db, 'products', it.productId);
-          await updateDoc(prodRef, { stock: increment(-it.cantidad) }).catch(e=>console.error(e));
-        }
+      // 2. Descontar stock general porque ahora es una Venta oficial (Batch update)
+      if (dealData.items && dealData.items.length > 0) {
+        const stockUpdates = dealData.items
+          .filter(it => it.productId)
+          .map(it => {
+            const prodRef = doc(db, 'products', it.productId);
+            return updateDoc(prodRef, { stock: increment(-it.cantidad) });
+          });
+        await Promise.all(stockUpdates).catch(e => console.error("Error updating stock in conversion:", e));
       }
 
       // 3. Aumentar Deuda del Cliente (la venta se transformó, el cliente ahora nos debe esto)
@@ -421,11 +424,15 @@ export function Presupuesto() {
     }
   };
 
-  const stats = {
+  const stats = useMemo(() => ({
     totalCotizado: quotes.reduce((acc, q) => acc + (q.status !== 'Rechazado' ? q.value : 0), 0),
     aprobadosYconvertidos: quotes.filter(q => q.status === 'Aprobado' || q.status === 'Convertido').length,
     tasa: quotes.length > 0 ? Math.round((quotes.filter(q => q.status === 'Convertido').length / quotes.length) * 100) : 0
-  };
+  }), [quotes]);
+  
+  const sortedQuotes = useMemo(() => {
+    return [...quotes].sort((a,b) => new Date(b.fechaEmision) - new Date(a.fechaEmision));
+  }, [quotes]);
 
   const renderStatusBadge = (status) => {
     switch (status) {
@@ -485,7 +492,7 @@ export function Presupuesto() {
               {quotes.length === 0 ? (
                 <tr><td colSpan="5" style={{textAlign: 'center', padding: '2rem'}}>No hay cotizaciones registradas.</td></tr>
               ) : (
-                quotes.sort((a,b) => new Date(b.fechaEmision) - new Date(a.fechaEmision)).map(quote => (
+                sortedQuotes.map(quote => (
                   <tr key={quote.id}>
                     <td data-label="Emisión / Validez">
                       <div className="contact-cell">

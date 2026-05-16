@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { ShoppingBag, Plus, Search, Loader2, MoreVertical, Edit2, Trash2, Paperclip, CheckCircle, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { db, storage } from '../config/firebase';
@@ -13,6 +13,7 @@ import { useData } from '../contexts/DataContext';
 import './Compras.css';
 
 export function Compras() {
+  const { currentUser } = useAuth();
   const { 
     inventory: productsList, 
     contacts, 
@@ -32,6 +33,9 @@ export function Compras() {
   const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [itemToDelete, setItemToDelete] = useState(null);
   
+  const [isAddingBank, setIsAddingBank] = useState(false);
+  const [newBankName, setNewBankName] = useState('');
+  
   const [isEditMode, setIsEditMode] = useState(false);
   const [selectedPurchase, setSelectedPurchase] = useState(null);
   
@@ -40,6 +44,8 @@ export function Compras() {
   const [isPayModalOpen, setIsPayModalOpen] = useState(false);
   const [selectedPurchaseForPay, setSelectedPurchaseForPay] = useState(null);
   const [paymentData, setPaymentData] = useState({ amount: '', accountId: '' });
+  const [activeMenuId, setActiveMenuId] = useState(null);
+  const menuRef = useRef(null);
   
   const initialFormState = {
     name: '', 
@@ -203,6 +209,27 @@ export function Compras() {
     }
   };
 
+  const handleSaveNewBank = async () => {
+    if(!newBankName.trim()) return;
+    try {
+      const newBankRef = await addDoc(collection(db, 'bankAccounts'), {
+        userId: currentUser.uid,
+        name: newBankName,
+        details: '',
+        type: 'Banco',
+        balance: 0,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp()
+      });
+      setFormData(prev => calculateTotals({ ...prev, bankAccountId: newBankRef.id }));
+      setIsAddingBank(false);
+      setNewBankName('');
+      toast.success("Gestionate Fácil: Cuenta creada y seleccionada");
+    } catch (e) {
+      toast.error("Gestionate Fácil: Error al crear cuenta");
+    }
+  };
+
   const handleUpdateAccountBalance = async (accountId, deltaAmount) => {
     if (!accountId || deltaAmount === 0) return;
     try {
@@ -210,7 +237,7 @@ export function Compras() {
       const accSnap = await getDoc(accRef);
       if (accSnap.exists()) {
         const currentBalance = parseFloat(accSnap.data().balance) || 0;
-        await updateDoc(accRef, { balance: Math.max(0, currentBalance + deltaAmount) });
+        await updateDoc(accRef, { balance: currentBalance + deltaAmount });
       }
     } catch (e) {
       console.error("Failed to update account balance", e);
@@ -245,7 +272,10 @@ export function Compras() {
       const purchaseData = {
         ...finalData,
         name: finalData.proveedorName || 'Compra sin proveedor',
-        date: finalData.fechaEmision
+        date: finalData.fechaEmision,
+        value: parseFloat(finalData.value || 0),
+        montoPagado: parseFloat(finalData.montoPagado || 0),
+        deuda: parseFloat(finalData.deuda || 0)
       };
 
       if (isEditMode && selectedPurchase) {
@@ -314,12 +344,15 @@ export function Compras() {
         // Sync Spent to Provider
         if (purchaseData.proveedorId) await handleUpdateContactSpent(purchaseData.proveedorId, purchaseData.value);
 
-        // Aumentar stock de forma permanente tras la compra
-        for (const it of purchaseData.items) {
-          if (it.productId) {
-            const prodRef = doc(db, 'products', it.productId);
-            await updateDoc(prodRef, { stock: increment(it.cantidad) }).catch(e=>console.error(e));
-          }
+        // Aumentar stock de forma permanente tras la compra (Batch update)
+        if (purchaseData.items && purchaseData.items.length > 0) {
+           const stockUpdates = purchaseData.items
+            .filter(it => it.productId)
+            .map(it => {
+              const prodRef = doc(db, 'products', it.productId);
+              return updateDoc(prodRef, { stock: increment(it.cantidad) });
+            });
+           await Promise.all(stockUpdates).catch(e => console.error("Error updating stock in purchase:", e));
         }
         
         // Cargar Deuda al Proveedor si hubiere
@@ -380,7 +413,7 @@ export function Compras() {
               const cSnap = await getDoc(provRef);
               if (cSnap.exists()) {
                 const currDeuda = parseFloat(cSnap.data().deuda) || 0;
-                await updateDoc(provRef, { deuda: Math.max(0, currDeuda - purToDel.deuda) });
+                await updateDoc(provRef, { deuda: currDeuda - purToDel.deuda });
               }
             } catch (e) {
               console.error("Error reverting provider debt:", e);
@@ -440,8 +473,17 @@ export function Compras() {
   };
 
   const handleRegisterPayment = async (e) => {
-    e.preventDefault();
-    if (!selectedPurchaseForPay || !paymentData.accountId || !paymentData.amount) return;
+    if (e) e.preventDefault();
+    if (!selectedPurchaseForPay) return;
+    if (!paymentData.accountId) {
+      toast.error("Seleccione una cuenta de egreso.");
+      return;
+    }
+    if (!paymentData.amount || parseFloat(paymentData.amount) <= 0) {
+      toast.error("Ingrese un monto válido a pagar.");
+      return;
+    }
+    
     setIsSaving(true);
 
     try {
@@ -465,7 +507,7 @@ export function Compras() {
         const provSnap = await getDoc(provRef);
         if (provSnap.exists()) {
            const currentProvDeuda = parseFloat(provSnap.data().deuda) || 0;
-           await updateDoc(provRef, { deuda: Math.max(0, currentProvDeuda - payAmt) });
+           await updateDoc(provRef, { deuda: currentProvDeuda - payAmt });
         }
       }
 
@@ -480,11 +522,15 @@ export function Compras() {
     }
   };
 
-  const stats = {
+  const stats = useMemo(() => ({
     totalInvertido: purchases.reduce((acc, p) => acc + (p.value || 0), 0),
     totalPagado: purchases.reduce((acc, p) => acc + (parseFloat(p.montoPagado) || 0), 0),
     totalDeuda: purchases.reduce((acc, p) => acc + (parseFloat(p.deuda) || 0), 0)
-  };
+  }), [purchases]);
+
+  const sortedPurchases = useMemo(() => {
+    return [...purchases].sort((a,b) => new Date(b.date || 0) - new Date(a.date || 0));
+  }, [purchases]);
 
   return (
     <div className="compras-container animate-fade-in">
@@ -535,7 +581,7 @@ export function Compras() {
               {purchases.length === 0 ? (
                 <tr><td colSpan="7" style={{textAlign: 'center', padding: '2rem'}}>Aún no tienes abastecimientos registrados.</td></tr>
               ) : (
-                purchases.sort((a,b) => new Date(b.date) - new Date(a.date)).map(pur => (
+                sortedPurchases.map(pur => (
                   <tr key={pur.id}>
                     <td data-label="Fecha Ingreso">
                       <div className="contact-cell">
@@ -748,17 +794,38 @@ export function Compras() {
                  <h4 style={{fontSize: '0.95rem', fontWeight: 600, marginBottom: '1rem', color: '#fca5a5'}}>Condiciones de Pago</h4>
                  <div className="form-group" style={{marginBottom: '1rem'}}>
                     <label>Egresar plata de:</label>
-                    <select 
-                      className="form-input" 
-                      value={formData.bankAccountId} 
-                      onChange={e => handleGlobalChange('bankAccountId', e.target.value)}
-                      required
-                    >
-                      <option value="" disabled>Seleccionar cuenta...</option>
-                      {bankAccounts.map(b => (
-                         <option key={b.id} value={b.id}>{b.name} (Disp: {formatCurrency(b.balance||0)})</option>
-                      ))}
-                    </select>
+                    {!isAddingBank ? (
+                      <div style={{display: 'flex', gap: '0.5rem'}}>
+                        <select 
+                          className="form-input" 
+                          value={formData.bankAccountId} 
+                          onChange={e => handleGlobalChange('bankAccountId', e.target.value)}
+                          required
+                          style={{flex: 1}}
+                        >
+                          <option value="" disabled>Seleccionar cuenta...</option>
+                          {bankAccounts.map(b => (
+                             <option key={b.id} value={b.id}>{b.name} (Disp: {formatCurrency(b.balance||0)})</option>
+                          ))}
+                        </select>
+                        <button type="button" className="btn-outline" style={{padding: '0 0.8rem'}} onClick={() => setIsAddingBank(true)} title="Añadir nueva cuenta rápido">
+                          <Plus size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <div style={{display: 'flex', gap: '0.5rem'}}>
+                        <input 
+                          type="text" 
+                          className="form-input" 
+                          placeholder="Nombre de la cuenta (Efectivo, Galicía, etc)" 
+                          value={newBankName}
+                          onChange={e => setNewBankName(e.target.value)}
+                          autoFocus
+                        />
+                        <button type="button" className="btn-primary" onClick={handleSaveNewBank} disabled={!newBankName.trim()}>OK</button>
+                        <button type="button" className="btn-outline" onClick={() => setIsAddingBank(false)}>X</button>
+                      </div>
+                    )}
                  </div>
                  <div className="form-group">
                     <label>Monto a entregar ahora ($)</label>
@@ -840,7 +907,7 @@ export function Compras() {
       <Modal 
         isOpen={isPayModalOpen} 
         onClose={() => setIsPayModalOpen(false)} 
-        title="Ajuste de Deuda (Registrar Pago)"
+        title="Registrar Pago a Proveedor"
       >
         <form onSubmit={handleRegisterPayment}>
           <div style={{ marginBottom: '1.5rem' }}>

@@ -40,9 +40,7 @@ export function VentasTable({
               </td>
             </tr>
           ) : (
-            deals
-              .sort((a, b) => new Date(b.date) - new Date(a.date))
-              .map((deal) => (
+            deals.map((deal) => (
                 <tr key={deal.id}>
                   <td data-label="Fecha">
                     <div className="contact-cell">

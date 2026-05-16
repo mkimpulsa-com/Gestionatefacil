@@ -82,7 +82,7 @@ export function Gastos() {
       const accSnap = await getDoc(accRef);
       if (accSnap.exists()) {
         const currentBalance = parseFloat(accSnap.data().balance) || 0;
-        await updateDoc(accRef, { balance: Math.max(0, currentBalance + deltaAmount) });
+        await updateDoc(accRef, { balance: currentBalance + deltaAmount });
       }
     } catch (e) {
       console.error("Failed to update account balance", e);

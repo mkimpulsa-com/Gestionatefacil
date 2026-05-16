@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Bell, Search, PlusCircle, Sparkles, Menu, AlertTriangle, PackageX, Package, Trophy, Info, Trash2, Check, Sun, Moon, Clock } from 'lucide-react';
+import { Bell, Search, PlusCircle, Sparkles, Menu, AlertTriangle, PackageX, Package, Trophy, Info, Trash2, Check, Sun, Moon, Clock, Cake } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../contexts/AuthContext';
 import { useTheme } from '../../contexts/ThemeContext';
@@ -13,6 +13,7 @@ import './Topbar.css';
 export function Topbar({ toggleMobileMenu }) {
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [stockNotifications, setStockNotifications] = useState([]);
+  const [bdayNotifications, setBdayNotifications] = useState([]);
   const [dbNotifications, setDbNotifications] = useState([]);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [viewProduct, setViewProduct] = useState(null);
@@ -29,6 +30,11 @@ export function Topbar({ toggleMobileMenu }) {
 
   const [dismissedAlerts, setDismissedAlerts] = useState(() => {
     const saved = localStorage.getItem('dismissedStockAlerts');
+    return saved ? JSON.parse(saved) : [];
+  });
+  
+  const [dismissedBdayAlerts, setDismissedBdayAlerts] = useState(() => {
+    const saved = localStorage.getItem('dismissedBdayAlerts');
     return saved ? JSON.parse(saved) : [];
   });
 
@@ -86,16 +92,46 @@ export function Topbar({ toggleMobileMenu }) {
       setDbNotifications(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
     });
 
+    // 3. Birthday Alerts Listener (Dynamic)
+    const qClients = query(collection(db, 'clients'), where('userId', '==', currentUser.uid));
+    const unsubClients = onSnapshot(qClients, (snapshot) => {
+      const alerts = [];
+      const today = new Date();
+      const currentMonth = today.getMonth() + 1;
+      const currentDay = today.getDate();
+      
+      snapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.birthday) {
+          const [y, m, d] = data.birthday.split('-').map(Number);
+          if (m === currentMonth && d === currentDay) {
+            alerts.push({
+              id: `bday-${doc.id}-${today.getFullYear()}`,
+              type: 'birthday',
+              title: 'Cumpleaños de Cliente 🎂',
+              message: `¡Hoy es el cumpleaños de ${data.name}! No olvides felicitarlo.`,
+              isCritical: false,
+              clientData: { id: doc.id, ...data },
+              createdAt: new Date()
+            });
+          }
+        }
+      });
+      setBdayNotifications(alerts);
+    });
+
     return () => {
       unsubSettings();
       unsubProducts();
       unsubNotifs();
+      unsubClients();
     };
   }, [currentUser, notifSettings.lowStock, notifSettings.outOfStock]);
 
   // Merge and sort all notifications
   const allNotifications = [
     ...stockNotifications,
+    ...bdayNotifications,
     ...dbNotifications
   ].sort((a, b) => {
     const timeA = a.createdAt?.seconds ? a.createdAt.seconds * 1000 : new Date(a.createdAt).getTime();
@@ -110,9 +146,19 @@ export function Topbar({ toggleMobileMenu }) {
     localStorage.setItem('dismissedStockAlerts', JSON.stringify(newDismissed));
   };
 
+  const handleDismissBdayAlert = (alertId, e) => {
+    e.stopPropagation();
+    const newDismissed = [...dismissedBdayAlerts, alertId];
+    setDismissedBdayAlerts(newDismissed);
+    localStorage.setItem('dismissedBdayAlerts', JSON.stringify(newDismissed));
+  };
+
   const unreadCount = allNotifications.filter(n => {
     if (n.id.toString().includes('stock')) {
       return !dismissedAlerts.includes(n.id);
+    }
+    if (n.id.toString().includes('bday')) {
+      return !dismissedBdayAlerts.includes(n.id);
     }
     return !n.isRead;
   }).length;
@@ -120,6 +166,9 @@ export function Topbar({ toggleMobileMenu }) {
   const visibleNotifications = allNotifications.filter(n => {
     if (n.id.toString().includes('stock')) {
       return !dismissedAlerts.includes(n.id);
+    }
+    if (n.id.toString().includes('bday')) {
+      return !dismissedBdayAlerts.includes(n.id);
     }
     return true;
   });
@@ -152,6 +201,9 @@ export function Topbar({ toggleMobileMenu }) {
       setViewProduct(notif.productData);
       setIsViewModalOpen(true);
       setIsDropdownOpen(false);
+    } else if (notif.type === 'birthday') {
+      navigate('/app/recordatorios');
+      setIsDropdownOpen(false);
     } else {
       // Mark as read in DB
       try {
@@ -179,6 +231,8 @@ export function Topbar({ toggleMobileMenu }) {
     // Also clear dismissed local alerts to allow fresh ones
     setDismissedAlerts([]);
     localStorage.removeItem('dismissedStockAlerts');
+    setDismissedBdayAlerts([]);
+    localStorage.removeItem('dismissedBdayAlerts');
     await batch.commit();
   };
 
@@ -255,7 +309,7 @@ export function Topbar({ toggleMobileMenu }) {
                <div className="dropdown-header">
                  <h3>Notificaciones</h3>
                  <div className="header-actions">
-                   {visibleNotifications.some(n => !n.isRead && !n.id.toString().includes('stock')) && (
+                   {visibleNotifications.some(n => !n.isRead && !n.id.toString().includes('stock') && !n.id.toString().includes('bday')) && (
                      <button className="btn-text-sm" onClick={async () => {
                        const batch = writeBatch(db);
                        dbNotifications.filter(n => !n.isRead).forEach(notif => {
@@ -280,20 +334,22 @@ export function Topbar({ toggleMobileMenu }) {
                    {visibleNotifications.map(notif => (
                      <div 
                        key={notif.id} 
-                       className={`notification-item ${notif.isRead || notif.id.toString().includes('stock') ? 'read' : ''} ${notif.isCritical ? 'critical' : ''}`}
+                       className={`notification-item ${notif.isRead || notif.id.toString().includes('stock') || notif.id.toString().includes('bday') ? 'read' : ''} ${notif.isCritical ? 'critical' : ''}`}
                        onClick={(e) => handleNotificationAction(notif, e)}
                      >
                        <div className={`notification-icon-bg ${notif.type}`}>
                          {notif.type === 'goal_achieved' ? <Trophy size={16} /> : 
-                          notif.type === 'out-of-stock' ? <PackageX size={16} /> : 
-                          notif.type === 'low-stock' ? <AlertTriangle size={16} /> : 
-                          notif.type === 'sale_success' ? <Check size={16} /> :
-                          <Info size={16} />}
+                           notif.type === 'note_completed' ? <Check size={16} /> : 
+                           notif.type === 'birthday' ? <Cake size={16} /> : 
+                           notif.type === 'out-of-stock' ? <PackageX size={16} /> : 
+                           notif.type === 'low-stock' ? <AlertTriangle size={16} /> : 
+                           notif.type === 'sale_success' ? <Check size={16} /> :
+                           <Info size={16} />}
                        </div>
                        <div className="notification-info">
                          <div className="notif-header">
                             <p className="notif-title">{notif.title}</p>
-                            {!notif.isRead && !notif.id.toString().includes('stock') && <span className="unread-dot"></span>}
+                            {!notif.isRead && !notif.id.toString().includes('stock') && !notif.id.toString().includes('bday') && <span className="unread-dot"></span>}
                          </div>
                          <p className="notif-msg">{notif.message}</p>
                        </div>

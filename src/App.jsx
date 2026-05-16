@@ -24,6 +24,7 @@ import { Contacto } from './pages/Contacto';
 import { DataProvider } from './contexts/DataContext';
 import { Toaster } from 'react-hot-toast';
 import { AdminRoute } from './components/layout/AdminRoute';
+import { EstadoNegocio } from './pages/EstadoNegocio';
 import { useAuth } from './contexts/AuthContext';
 
 import { TrialGuard } from './components/layout/TrialGuard';
@@ -102,6 +103,7 @@ function App() {
               <Route path="ai" element={<AI />} />
               <Route path="settings" element={<Settings />} />
               <Route path="recordatorios" element={<Recordatorios />} />
+              <Route path="estado-negocio" element={<EstadoNegocio />} />
             </Route>
 
             <Route path="*" element={<Navigate to="/" replace />} />

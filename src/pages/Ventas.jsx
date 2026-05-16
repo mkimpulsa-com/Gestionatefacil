@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Plus } from 'lucide-react';
@@ -376,12 +376,12 @@ export function Ventas() {
         } else {
            if (oldBankAccountId && oldMontoCobrado > 0) {
                const oldBankRef = doc(db, 'bankAccounts', oldBankAccountId);
-               try {
-                 const bSnap = await getDoc(oldBankRef);
-                 if (bSnap.exists()) {
-                   await updateDoc(oldBankRef, { balance: Math.max(0, parseFloat(bSnap.data().balance || 0) - oldMontoCobrado) });
-                 }
-               } catch(e) {}
+                try {
+                  const bSnap = await getDoc(oldBankRef);
+                  if (bSnap.exists()) {
+                    await updateDoc(oldBankRef, { balance: parseFloat(bSnap.data().balance || 0) - oldMontoCobrado });
+                  }
+                } catch(e) {}
            }
            if (newBankAccountId && newMontoCobrado > 0) {
                const newBankRef = doc(db, 'bankAccounts', newBankAccountId);
@@ -409,12 +409,15 @@ export function Ventas() {
            }
         }
 
-        // Descontar stock
-        for (const it of dealData.items) {
-          if (it.productId) {
-            const prodRef = doc(db, 'products', it.productId);
-            await updateDoc(prodRef, { stock: increment(-it.cantidad) }).catch(e=>console.error(e));
-          }
+        // Descontar stock (Batch update to prevent multiple snapshots)
+        if (dealData.items && dealData.items.length > 0) {
+          const stockUpdates = dealData.items
+            .filter(it => it.productId)
+            .map(it => {
+              const prodRef = doc(db, 'products', it.productId);
+              return updateDoc(prodRef, { stock: increment(-it.cantidad) });
+            });
+          await Promise.all(stockUpdates).catch(e => console.error("Error batch updating stock:", e));
         }
         
         // Cargar Deuda al Cliente si aplica
@@ -507,11 +510,11 @@ export function Ventas() {
         }
         if (dealToDel.bankAccountId && parseFloat(dealToDel.montoCobrado) > 0) {
             try {
-               const bankRef = doc(db, 'bankAccounts', dealToDel.bankAccountId);
-               const bSnap = await getDoc(bankRef);
-               if (bSnap.exists()) {
-                  await updateDoc(bankRef, { balance: Math.max(0, parseFloat(bSnap.data().balance || 0) - parseFloat(dealToDel.montoCobrado)) });
-               }
+                const bankRef = doc(db, 'bankAccounts', dealToDel.bankAccountId);
+                const bSnap = await getDoc(bankRef);
+                if (bSnap.exists()) {
+                   await updateDoc(bankRef, { balance: parseFloat(bSnap.data().balance || 0) - parseFloat(dealToDel.montoCobrado) });
+                }
             } catch(e) {}
         }
       }
@@ -607,16 +610,21 @@ export function Ventas() {
     }
   };
 
-  const pipeline = {
+  const pipeline = useMemo(() => ({
     prospectos: deals.filter(d => d.status === 'prospectos'),
     negociacion: deals.filter(d => d.status === 'negociacion'),
     ganados: deals.filter(d => d.status === 'ganados')
-  };
-  const stats = {
+  }), [deals]);
+
+  const stats = useMemo(() => ({
     pipeline: deals.reduce((acc, d) => acc + (d.status !== 'ganados' ? d.value : 0), 0),
     ganados: deals.reduce((acc, d) => acc + (d.status === 'ganados' ? d.value : 0), 0),
     conversion: deals.length > 0 ? Math.round((deals.filter(d => d.status === 'ganados').length / deals.length) * 100) : 0
-  };
+  }), [deals]);
+
+  const sortedDeals = useMemo(() => {
+    return [...deals].sort((a, b) => new Date(b.date) - new Date(a.date));
+  }, [deals]);
 
   return (
     <div className="ventas-container animate-fade-in">
@@ -635,7 +643,7 @@ export function Ventas() {
 
       <div className="glass-panel main-crm-panel">
         <VentasTable 
-          deals={deals}
+          deals={sortedDeals}
           loading={loading}
           activeMenuId={activeMenuId}
           setActiveMenuId={setActiveMenuId}

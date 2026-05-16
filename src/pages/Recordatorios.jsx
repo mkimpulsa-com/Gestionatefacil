@@ -246,15 +246,16 @@ export function Recordatorios() {
 
       // Trigger notification if completed
       if (newCompletedStatus) {
-        toast.success("Gestionate Fácil: ¡Meta cumplida!", {
-          icon: '🏆',
+        const isMeta = reminder.category === 'meta';
+        toast.success(`Gestionate Fácil: ¡${isMeta ? 'Meta' : 'Anotación'} cumplida!`, {
+          icon: isMeta ? '🏆' : '✅',
           duration: 4000
         });
 
         await addDoc(collection(db, 'notifications'), {
           userId: currentUser.uid,
-          type: 'goal_achieved',
-          title: 'Meta Alcanzada 🏆',
+          type: isMeta ? 'goal_achieved' : 'note_completed',
+          title: isMeta ? 'Meta Alcanzada 🏆' : 'Nota Completada ✅',
           message: `¡Felicidades! Has completado: "${reminder.text}"`,
           isRead: false,
           createdAt: serverTimestamp()

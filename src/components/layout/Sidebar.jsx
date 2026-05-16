@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Users, ShoppingCart, Package, DollarSign, BrainCircuit, Shield, Settings as SettingsIcon, ChevronDown, ChevronRight, Truck, Store, LogOut, TrendingUp, TrendingDown, PlusCircle, PieChart, ShoppingBag, Receipt, Bell } from 'lucide-react';
+import { LayoutDashboard, Users, ShoppingCart, Package, DollarSign, BrainCircuit, Shield, Settings as SettingsIcon, ChevronDown, ChevronRight, Truck, Store, LogOut, TrendingUp, TrendingDown, PlusCircle, PieChart, ShoppingBag, Receipt, Bell, Activity } from 'lucide-react';
 import { useAuth } from '../../contexts/AuthContext';
 import { db } from '../../config/firebase';
 import { doc, onSnapshot } from 'firebase/firestore';
@@ -75,6 +75,14 @@ export function Sidebar({ isMobileMenuOpen, setIsMobileMenuOpen }) {
               <LayoutDashboard size={20} className="nav-icon" />
               <span>Panel de control</span>
               {location.pathname === '/app' && <div className="active-indicator"></div>}
+            </Link>
+          </li>
+          
+          <li>
+            <Link to="/app/estado-negocio" className={`nav-link ${location.pathname === '/app/estado-negocio' ? 'active' : ''}`} onClick={() => setIsMobileMenuOpen && setIsMobileMenuOpen(false)}>
+              <Activity size={20} className="nav-icon" />
+              <span>Estado del Negocio</span>
+              {location.pathname === '/app/estado-negocio' && <div className="active-indicator"></div>}
             </Link>
           </li>
 

@@ -22,7 +22,7 @@ export function Dashboard() {
     isLoading: loadingData
   } = useData();
 
-  const allDeals = useMemo(() => allDealsRaw.filter(d => d.status === 'ganados'), [allDealsRaw]);
+  const allDeals = useMemo(() => allDealsRaw.filter(d => d.status === 'ganados' || d.status === 'negociacion'), [allDealsRaw]);
   
   const [stats, setStats] = useState({
     totalIncome: 0,
@@ -77,7 +77,12 @@ export function Dashboard() {
     let startDate;
     let interval = [];
     let formatStr = 'dd/MM';
-    let groupingFn = (d) => format(parseISO(d.date), 'yyyy-MM-dd');
+    let groupingFn = (d) => {
+      if (!d.date) return '';
+      // Safe split for "YYYY-MM-DD"
+      const parts = d.date.split('-');
+      return `${parts[0]}-${parts[1]}-${parts[2]}`;
+    };
 
     if (timeFilter === 'week') {
       startDate = subDays(now, 6);
@@ -89,7 +94,11 @@ export function Dashboard() {
       startDate = subMonths(now, 11);
       interval = eachMonthOfInterval({ start: startDate, end: now });
       formatStr = 'MMM';
-      groupingFn = (d) => format(parseISO(d.date), 'yyyy-MM');
+      groupingFn = (d) => {
+        if (!d.date) return '';
+        const parts = d.date.split('-');
+        return `${parts[0]}-${parts[1]}`;
+      };
     }
     
     // Normalize startDate to beginning of day to avoid missing today's data depending on exact hour
@@ -102,7 +111,10 @@ export function Dashboard() {
   const filteredData = useMemo(() => {
     const isWithinRange = (dateStr) => {
       if (!dateStr) return false;
-      const d = parseISO(dateStr);
+      // dateStr is "YYYY-MM-DD". We want to parse it as local date.
+      const parts = dateStr.split('-');
+      if (parts.length !== 3) return false;
+      const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
       return d >= dateRange.startDate && d <= dateRange.now;
     };
 
@@ -167,7 +179,8 @@ export function Dashboard() {
     filteredData.deals.forEach(d => {
       const key = groupingFn(d);
       if (!grouped[key]) grouped[key] = { total: 0, egresos: 0, deuda: 0 };
-      grouped[key].total += parseFloat(d.montoCobrado || 0);
+      // Usamos d.value (Total de la venta) para que figuren todas las ventas, cobradas o no.
+      grouped[key].total += parseFloat(d.value || 0);
       grouped[key].deuda += parseFloat(d.deuda || 0);
     });
 
@@ -353,7 +366,7 @@ export function Dashboard() {
                   <Tooltip 
                     contentStyle={{ backgroundColor: 'var(--surface-color)', borderColor: 'var(--panel-border)', borderRadius: '8px' }}
                     itemStyle={{ fontSize: '12px' }}
-                    formatter={(value, name) => [formatCurrency(value), name === 'total' ? 'Ingresos' : 'Egresos']}
+                    formatter={(value, name) => [formatCurrency(value), name === 'total' ? 'Ventas' : 'Egresos']}
                   />
                   <Area type="monotone" dataKey="total" stroke="var(--primary)" strokeWidth={3} fillOpacity={1} fill="url(#colorTotal)" />
                   <Area type="monotone" dataKey="egresos" stroke="#ef4444" strokeWidth={3} fillOpacity={1} fill="url(#colorEgresos)" />
@@ -380,7 +393,7 @@ export function Dashboard() {
                   <Tooltip 
                     cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                     contentStyle={{ backgroundColor: 'var(--surface-color)', borderColor: 'var(--panel-border)', borderRadius: '8px' }}
-                    formatter={(value, name) => [formatCurrency(value), name === 'total' ? 'Ingresos' : 'Egresos']}
+                    formatter={(value, name) => [formatCurrency(value), name === 'total' ? 'Ventas' : 'Egresos']}
                   />
                   <Bar dataKey="total" fill="var(--primary)" radius={[4, 4, 0, 0]} />
                   <Bar dataKey="egresos" fill="#ef4444" radius={[4, 4, 0, 0]} />
