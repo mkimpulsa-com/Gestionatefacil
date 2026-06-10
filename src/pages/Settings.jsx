@@ -39,6 +39,7 @@ export function Settings() {
 
   // Bank Accounts State
   const [bankAccounts, setBankAccounts] = useState([]);
+  const [contacts, setContacts] = useState([]);
   const [activeMenuId, setActiveMenuId] = useState(null);
   const menuRef = useRef(null);
 
@@ -48,7 +49,7 @@ export function Settings() {
   const [accountFormData, setAccountFormData] = useState({ name: '', details: '', balance: 0, type: 'Banco' });
 
   const [isAdjustModalOpen, setIsAdjustModalOpen] = useState(false);
-  const [adjustData, setAdjustData] = useState({ action: 'add', amount: '' });
+  const [adjustData, setAdjustData] = useState({ action: 'add', amount: '', linkToContact: false, contactId: '' });
 
   const [isTransferModalOpen, setIsTransferModalOpen] = useState(false);
   const [transferData, setTransferData] = useState({ fromId: '', toId: '', amount: '' });
@@ -141,7 +142,14 @@ export function Settings() {
        const accs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
        setBankAccounts(accs);
     });
-    return () => unsub();
+    const qContacts = query(collection(db, 'clients'), where('userId', '==', currentUser.uid));
+    const unsubContacts = onSnapshot(qContacts, (snap) => {
+       setContacts(snap.docs.map(d => ({ id: d.id, ...d.data() })));
+    });
+    return () => {
+       unsub();
+       unsubContacts();
+    };
   }, [currentUser]);
 
   useEffect(() => {
@@ -380,7 +388,7 @@ export function Settings() {
 
   const handleOpenAdjust = (acc) => {
     setSelectedAccount(acc);
-    setAdjustData({ action: 'add', amount: '' });
+    setAdjustData({ action: 'add', amount: '', linkToContact: false, contactId: '' });
     setIsAdjustModalOpen(true);
     setActiveMenuId(null);
   };
@@ -397,13 +405,69 @@ export function Settings() {
        if (adjustData.action === 'subtract') newBal -= amt;
        if (adjustData.action === 'set') newBal = amt;
 
+       // 1. Update Bank Account balance
        await updateDoc(doc(db, 'bankAccounts', selectedAccount.id), {
           balance: newBal,
           updatedAt: serverTimestamp()
        });
-       toast.success("Gestionate Fácil: Saldo ajustado");
+
+       // 2. Cascade adjustment to contact debt if linked
+       if (adjustData.linkToContact && adjustData.contactId && (adjustData.action === 'add' || adjustData.action === 'subtract')) {
+          const contact = contacts.find(c => c.id === adjustData.contactId);
+          if (contact) {
+             const oldDebt = parseFloat(contact.deuda) || 0;
+             let newDebt = oldDebt;
+             
+             if (adjustData.action === 'add') {
+                // Cash inflow -> client paying their debt
+                newDebt = Math.max(0, oldDebt - amt);
+             } else if (adjustData.action === 'subtract') {
+                // Cash outflow -> lending/extending credit -> debt increases
+                newDebt = oldDebt + amt;
+             }
+             
+             const debtReduction = oldDebt - newDebt;
+             
+             await updateDoc(doc(db, 'clients', contact.id), {
+                deuda: newDebt,
+                updatedAt: serverTimestamp()
+             });
+             
+             // If we reduced the global debt, cascade that reduction to unpaid tickets (oldest first)
+             if (debtReduction > 0) {
+                const qDeals = query(collection(db, 'deals'), where('clienteId', '==', contact.id));
+                const dealsSnap = await getDocs(qDeals);
+                let dealsList = dealsSnap.docs
+                   .map(d => ({ id: d.id, ...d.data() }))
+                   .filter(d => (parseFloat(d.deuda) || 0) > 0)
+                   .sort((a, b) => new Date(a.date) - new Date(b.date));
+                   
+                let remainingToAllocate = debtReduction;
+
+                for (const d of dealsList) {
+                   if (remainingToAllocate <= 0) break;
+                   
+                   const dealDeuda = parseFloat(d.deuda) || 0;
+                   const dealMontoCobrado = parseFloat(d.montoCobrado) || 0;
+                   
+                   const paymentForThisDeal = Math.min(dealDeuda, remainingToAllocate);
+                   
+                   await updateDoc(doc(db, 'deals', d.id), {
+                      deuda: dealDeuda - paymentForThisDeal,
+                      montoCobrado: dealMontoCobrado + paymentForThisDeal,
+                      updatedAt: serverTimestamp()
+                   });
+
+                   remainingToAllocate -= paymentForThisDeal;
+                }
+             }
+          }
+       }
+
+       toast.success("Gestionate Fácil: Saldo ajustado correctamente");
        setIsAdjustModalOpen(false);
     } catch(err) {
+       console.error("Error adjusting balance:", err);
        toast.error("Gestionate Fácil: Error al ajustar saldo");
     } finally {
        setIsSaving(false);
@@ -1392,7 +1456,7 @@ export function Settings() {
           </div>
           <div className="form-group">
             <label>Acción</label>
-            <select className="form-input" value={adjustData.action} onChange={e => setAdjustData({...adjustData, action: e.target.value})}>
+            <select className="form-input" value={adjustData.action} onChange={e => setAdjustData({...adjustData, action: e.target.value, linkToContact: false, contactId: ''})}>
                <option value="add">Ingreso / Sumar (+)</option>
                <option value="subtract">Egreso / Restar (-)</option>
                <option value="set">Fijar Nuevo Saldo (=)</option>
@@ -1402,6 +1466,43 @@ export function Settings() {
             <label>Monto ($)</label>
             <input type="number" step="0.01" min="0" required className="form-input" placeholder="0.00" autoFocus value={adjustData.amount} onChange={e => setAdjustData({...adjustData, amount: e.target.value})} />
           </div>
+
+          {(adjustData.action === 'add' || adjustData.action === 'subtract') && (
+            <>
+              <div className="form-group" style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1rem' }}>
+                <input 
+                  type="checkbox" 
+                  id="linkToContact"
+                  checked={adjustData.linkToContact} 
+                  onChange={e => setAdjustData({...adjustData, linkToContact: e.target.checked, contactId: ''})} 
+                  style={{ width: 'auto', margin: 0 }}
+                />
+                <label htmlFor="linkToContact" style={{ margin: 0, cursor: 'pointer', fontSize: '0.9rem' }}>
+                  {adjustData.action === 'add' ? 'Registrar como pago de un contacto (disminuye su deuda)' : 'Registrar como préstamo/crédito a un contacto (aumenta su deuda)'}
+                </label>
+              </div>
+
+              {adjustData.linkToContact && (
+                <div className="form-group" style={{ marginTop: '0.5rem' }}>
+                  <label>Seleccionar Contacto (Cliente / Proveedor / Revendedor)</label>
+                  <select 
+                    className="form-input" 
+                    value={adjustData.contactId} 
+                    onChange={e => setAdjustData({...adjustData, contactId: e.target.value})}
+                    required
+                  >
+                    <option value="" disabled>Seleccionar contacto...</option>
+                    {contacts.map(c => (
+                      <option key={c.id} value={c.id}>
+                        {c.name} ({c.type || 'Cliente'}) - Deuda: {formatCurrency(c.deuda || 0)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+            </>
+          )}
+
           <div className="modal-actions">
             <button type="button" className="btn-outline" onClick={() => setIsAdjustModalOpen(false)}>Cancelar</button>
             <button type="submit" className="btn-primary" disabled={isSaving}>Actualizar</button>
