@@ -1,11 +1,11 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 
-// Inicializamos con la API Key gratuita de Google AI Studio
-const genAI = new GoogleGenerativeAI(import.meta.env.VITE_GEMINI_API_KEY || "");
+const apiKey = import.meta.env.VITE_GEMINI_API_KEY || "AIzaSyCBwn2aIm3G5U8FGtJa5mPII6ftNqldEkc";
+const genAI = new GoogleGenerativeAI(apiKey);
 
 export const getAIResponse = async (prompt, context = "") => {
   try {
-    if (!import.meta.env.VITE_GEMINI_API_KEY) {
+    if (!apiKey) {
       return "Error: No se ha configurado la API Key de Gemini. Por favor, añádela al archivo .env como VITE_GEMINI_API_KEY.";
     }
 
