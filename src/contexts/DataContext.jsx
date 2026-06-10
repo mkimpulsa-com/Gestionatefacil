@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { db } from '../config/firebase';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
+import { collection, query, where, onSnapshot, doc } from 'firebase/firestore';
 import { useAuth } from './AuthContext';
 
 const DataContext = createContext();
@@ -25,6 +25,7 @@ export function DataProvider({ children }) {
   const [purchases, setPurchases] = useState([]);
   const [expenses, setExpenses] = useState([]);
   const [otherIncomes, setOtherIncomes] = useState([]);
+  const [appSettings, setAppSettings] = useState({ barcodeScannerEnabled: true, barcodeLoadEnabled: true, barcodeSearchEnabled: true });
   
   const [loading, setLoading] = useState({
     inventory: true,
@@ -49,6 +50,7 @@ export function DataProvider({ children }) {
       setPurchases([]);
       setExpenses([]);
       setOtherIncomes([]);
+      setAppSettings({ barcodeScannerEnabled: true, barcodeLoadEnabled: true, barcodeSearchEnabled: true });
       return;
     }
 
@@ -188,6 +190,19 @@ export function DataProvider({ children }) {
           setLoading(prev => ({ ...prev, brands: false }));
         }
       ),
+
+      // App Settings
+      onSnapshot(
+        doc(db, 'settings', userId),
+        (docSnap) => {
+          if (docSnap.exists() && docSnap.data().app) {
+            setAppSettings(prev => ({ ...prev, ...docSnap.data().app }));
+          }
+        },
+        (error) => {
+          console.error("Error loading settings:", error);
+        }
+      ),
     ];
 
     return () => unsubscribes.forEach(unsub => unsub());
@@ -203,6 +218,7 @@ export function DataProvider({ children }) {
     purchases,
     expenses,
     otherIncomes,
+    appSettings,
     isLoading: loading.inventory || loading.contacts || loading.banks || loading.categories || loading.brands || loading.deals || loading.purchases || loading.expenses || loading.otherIncomes,
     loadingStates: loading
   };

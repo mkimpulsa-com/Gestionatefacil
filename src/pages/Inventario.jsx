@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Package, Plus, AlertTriangle, Search, Filter, Download, UploadCloud, QrCode, ChevronDown, ChevronUp, X } from 'lucide-react';
+import { Package, Plus, AlertTriangle, Search, Filter, Download, UploadCloud, QrCode, ChevronDown, ChevronUp, X, AlertCircle } from 'lucide-react';
+import { Button } from '../components/ui/Button';
 import toast from 'react-hot-toast';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { db } from '../config/firebase';
@@ -17,6 +18,7 @@ import { ProductViewModal } from '../components/inventario/ProductViewModal';
 import { StockAdjustModal } from '../components/inventario/StockAdjustModal';
 import { CatalogModal } from '../components/inventario/CatalogModal';
 import { useData } from '../contexts/DataContext';
+import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 import './Inventario.css';
 
 export function Inventario() {
@@ -29,6 +31,7 @@ export function Inventario() {
     brands = [],
     inventory: contextInventory,
     contacts: contextContacts,
+    appSettings,
     isLoading: dataLoading 
   } = useData();
 
@@ -99,12 +102,18 @@ export function Inventario() {
 
   // Form State
   const [formData, setFormData] = useState({ 
-    name: '', description: '', stock: '', minStock: '0', costPrice: '', sellingPrice: '', 
+    name: '', description: '', barcode: '', stock: '', minStock: '0', costPrice: '', sellingPrice: '', 
     brand: '', category: '', supplier: '', isActive: true, size: '', color: '',
     hasVariants: false, variantOptions: [], variants: [],
     showInCatalog: true,
     stockAlertEnabled: false
   });
+
+  useBarcodeScanner((scannedCode) => {
+    if (!isModalOpen && !isViewModalOpen && !isAdjustModalOpen && !isImportConfirmOpen && !isCatalogModalOpen) {
+      setSearchTerm(scannedCode);
+    }
+  }, appSettings?.barcodeScannerEnabled !== false && appSettings?.barcodeSearchEnabled !== false);
   const [imageFile, setImageFile] = useState(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -386,6 +395,7 @@ export function Inventario() {
     setFormData({
       name: product.name || '',
       description: product.description || '',
+      barcode: product.barcode || '',
       stock: product.stock !== undefined ? product.stock.toString() : '0',
       minStock: product.minStock !== undefined ? product.minStock.toString() : '0',
       costPrice: product.costPrice || '',
@@ -420,7 +430,7 @@ export function Inventario() {
 
   const resetForm = () => {
     setFormData({ 
-      name: '', description: '', stock: '', minStock: '0', costPrice: '', sellingPrice: '', 
+      name: '', description: '', barcode: '', stock: '', minStock: '0', costPrice: '', sellingPrice: '', 
       brand: '', category: '', supplier: '', isActive: true, showInCatalog: true, 
       size: '', color: '', hasVariants: false, variantOptions: [], variants: [],
       stockAlertEnabled: false 
@@ -440,6 +450,7 @@ export function Inventario() {
   const exportToCSV = () => {
     const csvData = inventory.map(item => ({
       'Nombre': item.name || '',
+      'Codigo de Barras': item.barcode || '',
       'Stock': item.stock || 0,
       'Stock Minimo': item.minStock || 0,
       'Precio Costo': item.costPrice || '',
@@ -480,6 +491,7 @@ export function Inventario() {
         if (validData.length > 0) {
           const formattedData = validData.map(row => ({
             name: row.nombre || row.name || '',
+            barcode: row.barcode || row['codigo de barras'] || row.codigodebarras || '',
             stock: row.stock || row.cantidad || 0,
             minStock: row['stock minimo'] || row.lowstockthreshold || 0,
             costPrice: row['precio costo'] || row.costprice || '',
@@ -510,6 +522,7 @@ export function Inventario() {
         const existingProduct = inventory.find(p => p.name.toLowerCase() === row.name.toLowerCase());
         const productData = {
           name: row.name,
+          barcode: row.barcode,
           stock: parseInt(row.stock) || 0,
           minStock: parseInt(row.minStock) || 0,
           costPrice: row.costPrice,
@@ -555,12 +568,14 @@ export function Inventario() {
     
     const searchLower = String(searchTerm || '').toLowerCase().trim();
     const name = String(item.name || '').toLowerCase();
+    const barcode = String(item.barcode || '').toLowerCase();
     const category = String(item.category || '').toLowerCase();
     const brand = String(item.brand || '').toLowerCase();
     const supplier = String(item.supplier || '').toLowerCase();
 
     const matchesSearch = !searchLower || 
       name.includes(searchLower) || 
+      barcode.includes(searchLower) ||
       category.includes(searchLower) || 
       brand.includes(searchLower) ||
       supplier.includes(searchLower);
@@ -851,7 +866,20 @@ export function Inventario() {
         handleCopyLink={handleCopyLink}
       />
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={isEditMode ? "Editar Producto" : "Añadir Nuevo Producto"} className="wide-modal">
+      <Modal 
+        isOpen={isModalOpen} 
+        onClose={() => setIsModalOpen(false)} 
+        title={isEditMode ? "Editar Producto" : "Añadir Nuevo Producto"} 
+        className="wide-modal"
+        footer={
+          <>
+            <Button variant="ghost" type="button" onClick={() => setIsModalOpen(false)} disabled={isUploading}>Descartar</Button>
+            <Button variant="primary" type="button" isLoading={isUploading} onClick={() => document.getElementById('product-form-submit').click()} className="save-btn">
+              {isEditMode ? 'Actualizar Producto' : 'Publicar Producto'}
+            </Button>
+          </>
+        }
+      >
         <ProductForm 
           formData={formData}
           setFormData={setFormData}
@@ -887,6 +915,7 @@ export function Inventario() {
           toggleGroupExpansion={toggleGroupExpansion}
           handleVariantImageUpload={handleVariantImageUpload}
           setIsModalOpen={setIsModalOpen}
+          showBarcodeField={appSettings?.barcodeScannerEnabled !== false && appSettings?.barcodeLoadEnabled !== false}
         />
       </Modal>
 

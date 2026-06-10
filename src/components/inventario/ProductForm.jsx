@@ -3,7 +3,7 @@ import {
   Camera, X, Plus, GripVertical, ChevronUp, ChevronDown, 
   Trash2, Package, Layers, Info, Tag, Bookmark, Truck, 
   DollarSign, Hash, AlertCircle, Image as ImageIcon,
-  Settings, CheckCircle2
+  Settings, CheckCircle2, Barcode
 } from 'lucide-react';
 import { Button } from '../ui/Button';
 import toast from 'react-hot-toast';
@@ -42,7 +42,8 @@ export function ProductForm({
   expandedGroups,
   toggleGroupExpansion,
   handleVariantImageUpload,
-  setIsModalOpen
+  setIsModalOpen,
+  showBarcodeField
 }) {
   
   const parseCurrency = (val) => {
@@ -123,7 +124,7 @@ export function ProductForm({
 
   return (
     <div className="premium-form-wrapper">
-      <form className="premium-form-layout" onSubmit={handleSubmit}>
+      <form id="product-form" className="premium-form-layout" onSubmit={handleSubmit}>
         
         {/* Header de Sección: Información General */}
         <div className="form-section-header">
@@ -152,6 +153,23 @@ export function ProductForm({
                 />
               </div>
             </div>
+
+            {showBarcodeField !== false && (
+              <div className="premium-field-group">
+                <label className="premium-label">
+                  <Barcode size={14} /> Código de Barras (Opcional)
+                </label>
+                <div className="premium-input-wrapper">
+                  <input
+                    type="text"
+                    className="premium-input"
+                    placeholder="Ej: 7791234567890 o escanear"
+                    value={formData.barcode || ''}
+                    onChange={(e) => setFormData({ ...formData, barcode: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
 
             <div className="premium-field-group">
               <label className="premium-label">Descripción del Producto</label>
@@ -661,18 +679,7 @@ export function ProductForm({
            )}
         </div>
 
-        <div className="premium-form-footer">
-           <div className="footer-info">
-              <AlertCircle size={16} className="text-primary" />
-              <span>Los campos marcados son obligatorios para el control de inventario.</span>
-           </div>
-           <div className="footer-actions">
-              <Button variant="ghost" type="button" onClick={() => setIsModalOpen(false)} disabled={isUploading}>Descartar</Button>
-              <Button variant="primary" type="submit" isLoading={isUploading} className="save-btn">
-                 {isEditMode ? 'Actualizar Producto' : 'Publicar Producto'}
-              </Button>
-           </div>
-        </div>
+        <button type="submit" id="product-form-submit" style={{ display: 'none' }} />
       </form>
     </div>
   );

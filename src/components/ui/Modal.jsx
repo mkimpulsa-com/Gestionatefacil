@@ -2,7 +2,7 @@ import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 import './Modal.css';
 
-export function Modal({ isOpen, onClose, title, children, className = '' }) {
+export function Modal({ isOpen, onClose, title, children, footer, className = '' }) {
   if (!isOpen) return null;
 
   return createPortal(
@@ -17,6 +17,11 @@ export function Modal({ isOpen, onClose, title, children, className = '' }) {
         <div className="modal-body">
           {children}
         </div>
+        {footer && (
+          <div className="modal-footer-sticky">
+            {footer}
+          </div>
+        )}
       </div>
     </div>,
     document.body

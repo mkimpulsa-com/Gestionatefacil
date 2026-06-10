@@ -195,6 +195,31 @@ export function VentaForm({
                     value={item.productId || ''}
                     onChange={(productId) => updateItem(item.id, 'productId', productId)}
                   />
+                  {(() => {
+                    const prod = productsList.find(p => p.id === item.productId);
+                    if (prod && prod.hasVariants && prod.variants && prod.variants.length > 0) {
+                      return (
+                        <div style={{ marginTop: '0.5rem', display: 'flex', flexDirection: 'column', gap: '0.2rem' }}>
+                          <label style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>Variante:</label>
+                          <select
+                            className="form-input"
+                            value={item.variantId || ''}
+                            onChange={(e) => updateItem(item.id, 'variantId', e.target.value)}
+                            required
+                            style={{ fontSize: '0.8rem', padding: '0.3rem', height: 'auto' }}
+                          >
+                            <option value="" disabled>Seleccionar Variante...</option>
+                            {prod.variants.map((v) => (
+                              <option key={v.id} value={v.id}>
+                                {Object.values(v.attributes || {}).join(' / ')} - ${v.price || prod.sellingPrice} (Stock: {v.stock})
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    }
+                    return null;
+                  })()}
                 </td>
                 <td><input type="number" min="1" step="1" value={item.cantidad} onChange={(e) => updateItem(item.id, 'cantidad', e.target.value)} required /></td>
                 <td>
@@ -265,15 +290,15 @@ export function VentaForm({
             <span>{formatCurrency(formData.value)}</span>
           </div>
 
-          <div style={{ marginTop: '1.5rem', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <div style={{ marginBottom: '0.5rem', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+          <div style={{ marginTop: '1.5rem', background: '#334155', padding: '1rem', borderRadius: '8px', border: '1px solid rgba(255,255,255,0.1)', boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)' }}>
+            <div style={{ marginBottom: '0.6rem', fontSize: '0.85rem', color: '#cbd5e1', fontWeight: 600, letterSpacing: '0.05em', textTransform: 'uppercase' }}>
               Registro de Cobranza
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '0.8rem' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 500 }}>Monto Cobrado Hoy</span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
-                  <span style={{ color: 'var(--text-muted)', fontSize: '1.1rem' }}>$</span>
+                <span style={{ fontWeight: 500, color: '#f8fafc' }}>Monto Cobrado Hoy</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '0.4rem' }}>
+                  <span style={{ color: '#94a3b8', fontSize: '1.1rem', fontWeight: 'bold' }}>$</span>
                   <input
                     type="number"
                     className="form-input"
@@ -282,27 +307,48 @@ export function VentaForm({
                     value={formData.montoCobrado}
                     onChange={(e) => handleGlobalChange('montoCobrado', e.target.value)}
                     style={{
-                      width: '140px',
+                      width: '120px',
                       fontSize: '1.1rem',
-                      padding: '0.6rem',
+                      padding: '0.5rem',
                       fontWeight: 'bold',
                       textAlign: 'right',
-                      background: 'rgba(21, 128, 61, 0.1)',
-                      borderColor: 'var(--success)',
-                      color: 'var(--success)'
+                      background: '#0f172a', // Dark slate background for high contrast
+                      borderColor: '#64748b',
+                      color: '#ffffff', // White text for maximum readability
+                      borderRadius: '6px',
+                      height: '38px'
                     }}
                     placeholder="0.00"
                   />
+                  <button
+                    type="button"
+                    style={{
+                      padding: '0 0.8rem',
+                      fontSize: '0.8rem',
+                      fontWeight: 'bold',
+                      background: '#16a34a', // Solid green
+                      color: '#ffffff',
+                      border: 'none',
+                      borderRadius: '6px',
+                      cursor: 'pointer',
+                      height: '38px',
+                      transition: 'background 0.2s'
+                    }}
+                    onClick={() => handleGlobalChange('montoCobrado', formData.value)}
+                    title="Cobrar el total de la venta"
+                  >
+                    Todo
+                  </button>
                 </div>
               </div>
 
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: 500 }}>Cuenta Destino</span>
+                <span style={{ fontWeight: 500, color: '#f8fafc' }}>Cuenta Destino</span>
                 {!isAddingBank ? (
                   <div style={{ display: 'flex', gap: '0.4rem', marginLeft: '1rem' }}>
                     <select
                       className="form-input"
-                      style={{ width: '160px' }}
+                      style={{ width: '160px', height: '38px', background: '#0f172a', color: '#ffffff', borderColor: '#64748b' }}
                       value={formData.bankAccountId}
                       onChange={(e) => handleGlobalChange('bankAccountId', e.target.value)}
                       required
@@ -312,25 +358,32 @@ export function VentaForm({
                         <option key={b.id} value={b.id}>{b.name}</option>
                       ))}
                     </select>
-                    <button type="button" className="btn-outline" style={{ padding: '0 0.6rem' }} onClick={() => setIsAddingBank(true)} title="Añadir nueva caja">
+                    <button type="button" className="btn-outline" style={{ padding: '0 0.6rem', height: '38px', background: '#475569', borderColor: '#64748b', color: '#f8fafc' }} onClick={() => setIsAddingBank(true)} title="Añadir nueva caja">
                       <Plus size={16} />
                     </button>
                   </div>
                 ) : (
                   <div style={{ display: 'flex', gap: '0.4rem', marginLeft: '1rem' }}>
-                    <input type="text" className="form-input" placeholder="Nombre banco..." value={newBankName} onChange={(e) => setNewBankName(e.target.value)} autoFocus style={{ width: '120px' }} />
-                    <button type="button" className="btn-primary" style={{ padding: '0 0.5rem' }} onClick={handleSaveNewBank}>OK</button>
-                    <button type="button" className="btn-outline" style={{ padding: '0 0.5rem' }} onClick={() => setIsAddingBank(false)}>X</button>
+                    <input type="text" className="form-input" placeholder="Nombre banco..." value={newBankName} onChange={(e) => setNewBankName(e.target.value)} autoFocus style={{ width: '120px', height: '38px', background: '#0f172a', color: '#ffffff', borderColor: '#64748b' }} />
+                    <button type="button" className="btn-primary" style={{ padding: '0 0.5rem', height: '38px', background: '#16a34a' }} onClick={handleSaveNewBank}>OK</button>
+                    <button type="button" className="btn-outline" style={{ padding: '0 0.5rem', height: '38px', background: '#475569', borderColor: '#64748b', color: '#f8fafc' }} onClick={() => setIsAddingBank(false)}>X</button>
                   </div>
                 )}
               </div>
 
-              {formData.deuda > 0 && (
-                <div style={{ display: 'flex', justifyContent: 'space-between', color: 'var(--danger)', fontWeight: 600, borderTop: '1px dashed rgba(239, 68, 68, 0.4)', paddingTop: '0.8rem' }}>
-                  <span>Deuda a cargar al cliente</span>
-                  <span>{formatCurrency(formData.deuda)}</span>
-                </div>
-              )}
+              <div style={{ display: 'flex', justifyContent: 'space-between', fontWeight: 'bold', borderTop: '1px dashed rgba(255, 255, 255, 0.2)', paddingTop: '0.8rem', marginTop: '0.2rem' }}>
+                {formData.deuda > 0 ? (
+                  <>
+                    <span style={{ color: '#fca5a5' }}>Falta para el pago (deuda)</span>
+                    <span style={{ color: '#fca5a5' }}>{formatCurrency(formData.deuda)}</span>
+                  </>
+                ) : (
+                  <>
+                    <span style={{ color: '#4ade80' }}>¡Pago completo!</span>
+                    <span style={{ color: '#4ade80' }}>{formatCurrency(0)}</span>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </div>

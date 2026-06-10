@@ -77,6 +77,32 @@
   border-top: 1px solid var(--panel-border);
 }
 
+/* Sticky footer — siempre visible fuera del área de scroll */
+.modal-footer-sticky {
+  flex-shrink: 0;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--panel-border);
+  background: var(--surface-color);
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .modal-footer-sticky {
+    padding: 0.875rem 1rem;
+    gap: 0.5rem;
+  }
+  .modal-footer-sticky .btn-primary,
+  .modal-footer-sticky .btn-outline,
+  .modal-footer-sticky button {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+  }
+}
+
 @media (max-width: 640px) {
   .modal-overlay {
     padding: 0;
@@ -91,3 +117,50 @@
     padding: 1.25rem 1rem;
   }
 }
+
+/* Sticky behavior for standard modal footers rendered inside modal-body */
+.modal-footer {
+  position: sticky;
+  bottom: -1.5rem;
+  background: var(--surface-color);
+  margin: 1.5rem -1.5rem -1.5rem -1.5rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--panel-border);
+  display: flex;
+  justify-content: flex-end;
+  gap: 1rem;
+  z-index: 20;
+  box-shadow: 0 -4px 10px -2px rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 640px) {
+  .modal-footer {
+    bottom: -1rem;
+    margin: 1.25rem -1rem -1rem -1rem;
+    padding: 0.875rem 1rem;
+  }
+}
+
+/* Optimize landscape / horizontal views on smaller devices and tablets */
+@media (max-height: 600px) {
+  .modal-overlay {
+    padding: 0.5rem;
+    align-items: flex-start; /* allow natural scrolling if needed */
+  }
+  .modal-content {
+    max-height: calc(100vh - 1rem);
+    border-radius: 8px;
+  }
+  .modal-body {
+    padding: 1rem;
+  }
+  .modal-footer {
+    bottom: -1rem;
+    margin: 1rem -1rem -1rem -1rem;
+    padding: 0.75rem 1rem;
+  }
+  .modal-footer-sticky {
+    padding: 0.75rem 1.5rem;
+  }
+}
+

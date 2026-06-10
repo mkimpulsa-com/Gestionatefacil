@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { User, Shield, CreditCard, Bell, Monitor, Store, Lock, Camera, X, Wallet, Landmark, Plus, ArrowRightLeft, MoreVertical, Edit2, Trash2, DollarSign, ArrowDownRight, ShoppingBag, Tag, Bookmark, Box, Package, AlertTriangle, AlertCircle, TrendingUp, BarChart2, Sparkles, Calendar, Zap, Activity, CheckCircle, Clock } from 'lucide-react';
+import { User, Shield, CreditCard, Bell, Monitor, Store, Lock, Camera, X, Wallet, Landmark, Plus, ArrowRightLeft, MoreVertical, Edit2, Trash2, DollarSign, ArrowDownRight, ShoppingBag, Tag, Bookmark, Box, Package, AlertTriangle, AlertCircle, TrendingUp, BarChart2, Sparkles, Calendar, Zap, Activity, CheckCircle, Clock, Search } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useTheme } from '../contexts/ThemeContext';
 import { db } from '../config/firebase';
@@ -66,6 +66,11 @@ export function Settings() {
     expenseAlerts: false
   });
   const [isSavingNotifs, setIsSavingNotifs] = useState(false);
+
+  // App Settings State
+  const [appSettings, setAppSettings] = useState({
+    barcodeScannerEnabled: true
+  });
 
   // Online Store / Inventory Organization State
   const [categories, setCategories] = useState([]);
@@ -145,8 +150,10 @@ export function Settings() {
       try {
         const docRef = doc(db, 'settings', currentUser.uid);
         const docSnap = await getDoc(docRef);
-        if (docSnap.exists() && docSnap.data().notifications) {
-          setNotifSettings(docSnap.data().notifications);
+        if (docSnap.exists()) {
+          const data = docSnap.data();
+          if (data.notifications) setNotifSettings(data.notifications);
+          if (data.app) setAppSettings(prev => ({ ...prev, ...data.app }));
         }
       } catch (error) {
         console.error("Error fetching notifications settings:", error);
@@ -188,6 +195,7 @@ export function Settings() {
     { id: 'tienda', label: 'Tienda Online', icon: ShoppingBag },
     { id: 'apariencia', label: 'Apariencia', icon: Monitor },
     { id: 'notificaciones', label: 'Notificaciones', icon: Bell },
+    { id: 'funciones', label: 'Funciones', icon: Zap },
     { id: 'seguridad', label: 'Seguridad', icon: Shield },
     { id: 'facturacion', label: 'Facturación', icon: CreditCard },
   ];
@@ -469,6 +477,23 @@ export function Settings() {
       }, { merge: true });
     } catch (error) {
       console.error("Error saving notification settings:", error);
+      toast.error("Gestionate Fácil: Error al guardar preferencia");
+    }
+  };
+
+  const handleToggleAppSetting = async (key) => {
+    if (!currentUser) return;
+    const newSettings = { ...appSettings, [key]: !appSettings[key] };
+    setAppSettings(newSettings);
+    
+    // Auto-save to Firestore
+    try {
+      await setDoc(doc(db, 'settings', currentUser.uid), {
+        app: newSettings,
+        updatedAt: serverTimestamp()
+      }, { merge: true });
+    } catch (error) {
+      console.error("Error saving app settings:", error);
       toast.error("Gestionate Fácil: Error al guardar preferencia");
     }
   };
@@ -1002,6 +1027,65 @@ export function Settings() {
                   <div className={`theme-option ${theme === 'dark' ? 'active' : ''}`} onClick={() => setTheme('dark')}>
                     <div className="theme-preview dark-theme"></div>
                     <span>Oscuro</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'funciones' && (
+            <div className="settings-section animate-fade-in">
+              <h2>Funciones del Sistema</h2>
+              <p className="section-desc">Activa o desactiva características adicionales del programa.</p>
+
+              <div className="notif-settings-grid" style={{marginTop: '2rem'}}>
+                <div className="notif-card-pro">
+                  <div className="notif-card-header">
+                    <Monitor size={20} className="notif-icon-category" />
+                    <h3>Automatización</h3>
+                  </div>
+                  <div className="notif-items-container">
+                    <div className="notif-item-pro" onClick={() => handleToggleAppSetting('barcodeScannerEnabled')}>
+                      <div className="notif-icon-box success">
+                        <Monitor size={18} />
+                      </div>
+                      <div className="notif-text">
+                        <span className="notif-label">Lector de Código de Barras (Principal)</span>
+                        <p>Activa o desactiva por completo el uso del lector.</p>
+                      </div>
+                      <label className="notif-switch-pro">
+                        <input type="checkbox" checked={appSettings.barcodeScannerEnabled} readOnly />
+                        <span className="slider-pro round"></span>
+                      </label>
+                    </div>
+
+                    <div className="notif-item-pro" style={{ opacity: appSettings.barcodeScannerEnabled ? 1 : 0.5, pointerEvents: appSettings.barcodeScannerEnabled ? 'auto' : 'none', marginLeft: '2rem' }} onClick={() => handleToggleAppSetting('barcodeSearchEnabled')}>
+                      <div className="notif-icon-box info">
+                        <Search size={18} />
+                      </div>
+                      <div className="notif-text">
+                        <span className="notif-label">Buscar con Lector</span>
+                        <p>Permite buscar productos en el Inventario usando el lector.</p>
+                      </div>
+                      <label className="notif-switch-pro">
+                        <input type="checkbox" checked={appSettings.barcodeSearchEnabled !== false} readOnly />
+                        <span className="slider-pro round"></span>
+                      </label>
+                    </div>
+
+                    <div className="notif-item-pro" style={{ opacity: appSettings.barcodeScannerEnabled ? 1 : 0.5, pointerEvents: appSettings.barcodeScannerEnabled ? 'auto' : 'none', marginLeft: '2rem' }} onClick={() => handleToggleAppSetting('barcodeLoadEnabled')}>
+                      <div className="notif-icon-box warn">
+                        <Plus size={18} />
+                      </div>
+                      <div className="notif-text">
+                        <span className="notif-label">Cargar con Lector</span>
+                        <p>Permite agregar productos en Ventas e Inventario con el lector.</p>
+                      </div>
+                      <label className="notif-switch-pro">
+                        <input type="checkbox" checked={appSettings.barcodeLoadEnabled !== false} readOnly />
+                        <span className="slider-pro round"></span>
+                      </label>
+                    </div>
                   </div>
                 </div>
               </div>

@@ -15,6 +15,7 @@ import { VentasTable } from '../components/ventas/VentasTable';
 import { VentaForm } from '../components/ventas/VentaForm';
 import { ReceiptPreview } from '../components/ventas/ReceiptPreview';
 import { useData } from '../contexts/DataContext';
+import { useBarcodeScanner } from '../hooks/useBarcodeScanner';
 import './Ventas.css';
 
 export function Ventas() {
@@ -24,6 +25,7 @@ export function Ventas() {
     contacts, 
     banks: bankAccounts, 
     deals, 
+    appSettings,
     isLoading: loading 
   } = useData();
 
@@ -96,12 +98,47 @@ export function Ventas() {
     return { ...data, value: finalTotal, deuda };
   };
 
+  const adjustProductStock = async (productId, variantId, qtyDelta) => {
+    if (!productId) return;
+    try {
+      const prodRef = doc(db, 'products', productId);
+      const prodSnap = await getDoc(prodRef);
+      if (prodSnap.exists()) {
+        const prodData = prodSnap.data();
+        if (prodData.hasVariants && prodData.variants && prodData.variants.length > 0) {
+          const newVariants = prodData.variants.map(v => {
+            if (v.id === variantId) {
+              return {
+                ...v,
+                stock: (parseInt(v.stock) || 0) + qtyDelta
+              };
+            }
+            return v;
+          });
+          const newTotalStock = newVariants.reduce((acc, v) => acc + (parseInt(v.stock) || 0), 0);
+          await updateDoc(prodRef, {
+            variants: newVariants,
+            stock: newTotalStock,
+            updatedAt: serverTimestamp()
+          });
+        } else {
+          await updateDoc(prodRef, {
+            stock: increment(qtyDelta),
+            updatedAt: serverTimestamp()
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error adjusting product stock:", error);
+    }
+  };
+
   const addItem = () => {
     setFormData(prev => ({
       ...prev,
       items: [
         ...prev.items, 
-        { id: Date.now().toString(), productId: '', descripcion: '', cantidad: 1, precio: 0, descuento: 0, iva: '0', subtotal: 0, total: 0 }
+        { id: Date.now().toString(), productId: '', variantId: '', descripcion: '', cantidad: 1, precio: 0, descuento: 0, iva: '0', subtotal: 0, total: 0 }
       ]
     }));
   };
@@ -122,11 +159,25 @@ export function Ventas() {
             const prod = productsList.find(p => p.id === val);
             if (prod) {
               updated.productId = val;
+              updated.variantId = '';
               updated.descripcion = prod.name;
               updated.precio = parseFloat(prod.sellingPrice?.toString().replace(/[^0-9.-]+/g,"")) || 0;
               updated.costPrice = parseFloat(prod.costPrice?.toString().replace(/[^0-9.-]+/g,"")) || 0;
             } else {
               updated.productId = val;
+              updated.variantId = '';
+            }
+          } else if (field === 'variantId') {
+            const prod = productsList.find(p => p.id === updated.productId);
+            if (prod) {
+              const variant = prod.variants?.find(v => v.id === val);
+              if (variant) {
+                updated.variantId = val;
+                const attrString = Object.values(variant.attributes || {}).join(' / ');
+                updated.descripcion = `${prod.name} (${attrString})`;
+                const vPrice = parseFloat(variant.price?.toString().replace(/[^0-9.-]+/g,""));
+                updated.precio = !isNaN(vPrice) ? vPrice : (parseFloat(prod.sellingPrice?.toString().replace(/[^0-9.-]+/g,"")) || 0);
+              }
             }
           } else {
             updated[field] = field === 'descripcion' || field === 'iva' ? val : parseFloat(val) || 0;
@@ -150,6 +201,89 @@ export function Ventas() {
   const handleGlobalChange = (field, val) => {
     setFormData(prev => calculateTotals({ ...prev, [field]: val }));
   };
+
+  useBarcodeScanner((scannedCode) => {
+    if (isModalOpen) {
+      let product = productsList.find(p => p.barcode === scannedCode);
+      let matchedVariant = null;
+
+      if (!product) {
+        for (const p of productsList) {
+          if (p.hasVariants && p.variants) {
+            const v = p.variants.find(varnt => varnt.sku === scannedCode);
+            if (v) {
+              product = p;
+              matchedVariant = v;
+              break;
+            }
+          }
+        }
+      }
+
+      if (product) {
+        setFormData(prev => {
+          const existingItem = prev.items.find(i => 
+            i.productId === product.id && 
+            (matchedVariant ? i.variantId === matchedVariant.id : !i.variantId)
+          );
+          if (existingItem) {
+            const newItems = prev.items.map(item => {
+              if (item.id === existingItem.id) {
+                let updated = { ...item };
+                updated.cantidad = parseInt(updated.cantidad) + 1;
+                updated.subtotal = updated.cantidad * updated.precio;
+                const discountAmt = updated.subtotal * (updated.descuento / 100);
+                const subtotalDisc = updated.subtotal - discountAmt;
+                const ivaRate = parseFloat(updated.iva) || 0;
+                const ivaAmt = subtotalDisc * (ivaRate / 100);
+                updated.total = subtotalDisc + ivaAmt;
+                return updated;
+              }
+              return item;
+            });
+            const descName = matchedVariant ? `${product.name} (${Object.values(matchedVariant.attributes || {}).join(' / ')})` : product.name;
+            toast.success(`Gestionate Fácil: Cantidad de ${descName} incrementada (+1)`);
+            return calculateTotals({ ...prev, items: newItems });
+          } else {
+            const newItemId = Date.now().toString();
+            let precio = parseFloat(product.sellingPrice?.toString().replace(/[^0-9.-]+/g,"")) || 0;
+            let descripcion = product.name;
+            let variantId = '';
+            
+            if (matchedVariant) {
+              variantId = matchedVariant.id;
+              const attrString = Object.values(matchedVariant.attributes || {}).join(' / ');
+              descripcion = `${product.name} (${attrString})`;
+              const vPrice = parseFloat(matchedVariant.price?.toString().replace(/[^0-9.-]+/g,""));
+              if (!isNaN(vPrice)) {
+                precio = vPrice;
+              }
+            }
+
+            const newItem = { 
+              id: newItemId, 
+              productId: product.id, 
+              variantId: variantId,
+              descripcion: descripcion, 
+              cantidad: 1, 
+              precio: precio, 
+              descuento: 0, 
+              iva: '0', 
+              subtotal: precio, 
+              total: precio,
+              costPrice: parseFloat(product.costPrice?.toString().replace(/[^0-9.-]+/g,"")) || 0
+            };
+            const newItems = [...prev.items, newItem];
+            toast.success(`Gestionate Fácil: ${descripcion} agregado a la venta`);
+            return calculateTotals({ ...prev, items: newItems });
+          }
+        });
+      } else {
+        toast.error(`Gestionate Fácil: Producto o variante con código ${scannedCode} no encontrado`);
+      }
+    }
+  }, appSettings?.barcodeScannerEnabled !== false && appSettings?.barcodeLoadEnabled !== false);
+
   useEffect(() => {
     if (!currentUser) return;
 
@@ -409,15 +543,12 @@ export function Ventas() {
            }
         }
 
-        // Descontar stock (Batch update to prevent multiple snapshots)
+        // Descontar stock
         if (dealData.items && dealData.items.length > 0) {
           const stockUpdates = dealData.items
             .filter(it => it.productId)
-            .map(it => {
-              const prodRef = doc(db, 'products', it.productId);
-              return updateDoc(prodRef, { stock: increment(-it.cantidad) });
-            });
-          await Promise.all(stockUpdates).catch(e => console.error("Error batch updating stock:", e));
+            .map(it => adjustProductStock(it.productId, it.variantId, -it.cantidad));
+          await Promise.all(stockUpdates);
         }
         
         // Cargar Deuda al Cliente si aplica
@@ -491,8 +622,7 @@ export function Ventas() {
         if (dealToDel.items) {
           for (const it of dealToDel.items) {
             if (it.productId) {
-              const prodRef = doc(db, 'products', it.productId);
-              await updateDoc(prodRef, { stock: increment(it.cantidad) }).catch(err => console.error("Error updating stock:", err));
+              await adjustProductStock(it.productId, it.variantId, it.cantidad);
             }
           }
         }
